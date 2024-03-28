@@ -135,15 +135,15 @@ void init_ttf(void){
 	SDL_Color colorWhite = { COLOR_RGBA_WHITE };
 
 	if (TTF_Init() == -1) {
-        SDL_Log("SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError());
-        exit(EXIT_FAILURE);
-    }
+        	SDL_Log("SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError());
+        	exit(EXIT_FAILURE);
+    	}
 
 	font = TTF_OpenFont("./resources/arial.ttf", DEFAULT_FONT_SIZE);
-    if (font == NULL) {
-        SDL_Log("Failed to load font! SDL_ttf Error: %s\n", TTF_GetError());
-        exit(EXIT_FAILURE);
-    }
+    	if (font == NULL) {
+        	SDL_Log("Failed to load font! SDL_ttf Error: %s\n", TTF_GetError());
+        	exit(EXIT_FAILURE);
+    	}
 
 	for (i = 0; i < WHITE_KEY_NUM; ++i){
 		pk = &(pianoKeys[i]);
@@ -202,9 +202,9 @@ void init_ttf(void){
 
 void init_audio(void){
 	if (Mix_OpenAudio(DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, DEFAULT_CHANNEL_NUM, DEFAULT_CHUNK_SIZE) < 0) {
-        SDL_Log("SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError());
-        exit(EXIT_FAILURE);
-    }
+        	SDL_Log("SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError());
+        	exit(EXIT_FAILURE);
+    	}
 
 	int i;
 	PianoKey* pk;
