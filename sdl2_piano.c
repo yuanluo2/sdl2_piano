@@ -236,6 +236,8 @@ void clean(void){
 	int i;
 	for (i = 0; i < PIANO_KEY_NUM; ++i){
 		Mix_FreeChunk(pianoKeys[i].chunk);
+		SDL_DestroyTexture(pianoKeys[i].keyNameTexture);
+		SDL_DestroyTexture(pianoKeys[i].toneNameTexture);
 	}
 
 	Mix_CloseAudio();
