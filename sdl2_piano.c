@@ -354,20 +354,20 @@ void renderPianoKeys(void){
 
 int main() {
 	init();
-
+	
 	PianoKey* pk;
 	Uint32 startTime, endTime, frameTime;
-    int running = 1;
-    SDL_Event event;
-
-    while (running) {
+	int running = 1;
+    	SDL_Event event;
+	
+	while (running) {
 		startTime = SDL_GetTicks();
 
-        while (SDL_PollEvent(&event) != 0) {
-            if (event.type == SDL_QUIT) {
-                running = 0;
+		while (SDL_PollEvent(&event) != 0) {
+            		if (event.type == SDL_QUIT) {
+                		running = 0;
 			} else if (event.type == SDL_KEYDOWN) {
-                pk = getPianoKeyMapping(event.key.keysym.sym);
+                		pk = getPianoKeyMapping(event.key.keysym.sym);
 
 				if (pk != NULL){
 					pk->isPressed = 1;
@@ -375,25 +375,25 @@ int main() {
 					/* disperse sound onto different channels based on the integer value of the pressed key. */
 					Mix_PlayChannel(event.key.keysym.sym % DEFAULT_CHANNEL_NUM, pk->chunk, 0);
 				}
-            } else if (event.type == SDL_KEYUP) {
-                pk = getPianoKeyMapping(event.key.keysym.sym);
+            		} else if (event.type == SDL_KEYUP) {
+                		pk = getPianoKeyMapping(event.key.keysym.sym);
 
 				if (pk != NULL){
 					pk->isPressed = 0;
 				}
-            }
-        }
+            		}
+        	}
 
 		renderPianoKeys();
 
 		endTime = SDL_GetTicks();
-        frameTime = endTime - startTime;
+        	frameTime = endTime - startTime;
 
-        if (frameTime < FRAME_DELAY) {
-            SDL_Delay(FRAME_DELAY - frameTime);
-        }
-    }
+        	if (frameTime < FRAME_DELAY) {
+            		SDL_Delay(FRAME_DELAY - frameTime);
+        	}
+    	}
 
 	clean();
-    return 0;
+    	return 0;
 }
