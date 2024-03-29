@@ -241,6 +241,8 @@ void clean(void){
 
 	Mix_CloseAudio();
 	TTF_CloseFont(font);
+
+	Mix_Quit();
 	TTF_Quit();
 	SDL_Quit();
 }
