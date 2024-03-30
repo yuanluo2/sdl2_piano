@@ -355,9 +355,15 @@ int render(void){
 }
 
 int load_sound(PianoKey* pk){
-	snprintf(soundPath, SOUND_PATH_MAX_LEN, "./resources/%s.wav", pk->toneName);
+	snprintf(soundPath, SOUND_PATH_MAX_LEN, "./resources/%s.Ogg", pk->toneName);
 
-	if ((pk->chunk = Mix_LoadWAV(soundPath)) == NULL){
+	SDL_RWops *rw = SDL_RWFromFile(soundPath, "rb");
+	if (rw == NULL){
+		SDL_Log("SDL_RWFromFile() failed on: %s, error: %s\n", soundPath, SDL_GetError());
+		return 0;
+	}
+
+	if ((pk->chunk = Mix_LoadWAV_RW(rw, 1)) == NULL){
 		SDL_Log("Can't load sound resource: %s, error: %s\n", soundPath, Mix_GetError());
 		return 0;
 	}
