@@ -380,7 +380,7 @@ int main(){
 				if (pk != NULL){
 					pk->isPressed = 1;
 
-					if (pk->chunk == NULL){
+					if (pk->chunk == NULL){   /* lazy load sound. */
 						if (!load_sound(pk)){
 							goto finally;
 						}
