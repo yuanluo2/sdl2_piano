@@ -253,6 +253,7 @@ int render_key(PianoKey* pk){
 	rect.x = pk->initX;
 	rect.y = 0;
 	int width, height;
+	int flag = 1;
 
 	if (pk->keyType == KT_BLACK){
 		rect.w = BLACK_KEY_WIDTH;
@@ -281,28 +282,32 @@ int render_key(PianoKey* pk){
 
 	SDL_RenderFillRect(renderer, &rect);
 
-	/* render outlined rectangles. */
+	/* outlined rect. */
 	SDL_SetRenderDrawColor(renderer, COLOR_BLACK.r, COLOR_BLACK.g, COLOR_BLACK.b, COLOR_BLACK.a);
 	SDL_RenderDrawRect(renderer, &rect);
 
 	if ((keyNameSurface = TTF_RenderText_Solid(font, pk->keyName, textColor)) == NULL) {
 		SDL_Log("Unable to create key name surface: %s, SDL_ttf Error: %s\n", pk->keyName, TTF_GetError());
-		return 0;
+		flag = 0;
+		goto clean_surface_texture;
 	}
 
 	if ((toneNameSurface = TTF_RenderText_Solid(font, pk->toneName, textColor)) == NULL) {
 		SDL_Log("Unable to create tone name surface: %s, SDL_ttf Error: %s\n", pk->toneName, TTF_GetError());
-		return 0;
+		flag = 0;
+		goto clean_surface_texture;
 	}
 
 	if ((keyNameTexture = SDL_CreateTextureFromSurface(renderer, keyNameSurface)) == NULL){
 		SDL_Log("Unable to create key name texture: %s, SDL_ttf Error: %s\n", pk->keyName, TTF_GetError());
-		return 0;
+		flag = 0;
+		goto clean_surface_texture;
 	}
 
 	if ((toneNameTexture = SDL_CreateTextureFromSurface(renderer, toneNameSurface)) == NULL){
 		SDL_Log("Unable to create tone name texture: %s, SDL_ttf Error: %s\n", pk->toneName, TTF_GetError());
-		exit(EXIT_FAILURE);
+		flag = 0;
+		goto clean_surface_texture;
 	}
 
 	SDL_Rect keyNameRect = { 
@@ -322,12 +327,24 @@ int render_key(PianoKey* pk){
 	SDL_RenderCopy(renderer, keyNameTexture, NULL, &keyNameRect);
 	SDL_RenderCopy(renderer, toneNameTexture, NULL, &toneNameRect);
 
-	SDL_FreeSurface(keyNameSurface);
-	SDL_FreeSurface(toneNameSurface);
-	SDL_DestroyTexture(keyNameTexture);
-	SDL_DestroyTexture(toneNameTexture);
+clean_surface_texture:
+	if (keyNameSurface != NULL){
+		SDL_FreeSurface(keyNameSurface);
+	}
 
-	return 1;
+	if (toneNameSurface != NULL){
+		SDL_FreeSurface(toneNameSurface);
+	}
+
+	if (keyNameTexture != NULL){
+		SDL_DestroyTexture(keyNameTexture);
+	}
+
+	if (toneNameTexture != NULL){
+		SDL_DestroyTexture(toneNameTexture);
+	}
+	
+	return flag;
 }
 
 int render(void){
@@ -367,6 +384,7 @@ int load_sound(PianoKey* pk){
 		return 0;
 	}
 
+	/* the 2nd parameter of the Mix_LoadWAV_RW() will free the rw automatically. */
 	if ((pk->chunk = Mix_LoadWAV_RW(rw, 1)) == NULL){
 		SDL_Log("Can't load sound resource: %s, error: %s\n", soundPath, Mix_GetError());
 		return 0;
