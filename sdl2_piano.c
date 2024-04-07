@@ -281,6 +281,10 @@ int render_key(PianoKey* pk){
 
 	SDL_RenderFillRect(renderer, &rect);
 
+	/* render outlined rectangles. */
+	SDL_SetRenderDrawColor(renderer, COLOR_BLACK.r, COLOR_BLACK.g, COLOR_BLACK.b, COLOR_BLACK.a);
+	SDL_RenderDrawRect(renderer, &rect);
+
 	if ((keyNameSurface = TTF_RenderText_Solid(font, pk->keyName, textColor)) == NULL) {
 		SDL_Log("Unable to create key name surface: %s, SDL_ttf Error: %s\n", pk->keyName, TTF_GetError());
 		return 0;
