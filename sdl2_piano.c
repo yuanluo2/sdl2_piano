@@ -245,15 +245,41 @@ PianoKey* get_piano_key_mapping(SDL_KeyCode key){
 	}
 }
 
-int render_key(PianoKey* pk){
-	SDL_Rect rect;
-	SDL_Color textColor;
+void render_key_text(PianoKey* pk, SDL_Color textColor, int width, int height){
 	SDL_Surface* keyNameSurface, *toneNameSurface;
 	SDL_Texture* keyNameTexture, *toneNameTexture;
+	SDL_Rect keyNameRect, toneNameRect;
+
+	keyNameSurface = TTF_RenderText_Solid(font, pk->keyName, textColor);
+	toneNameSurface = TTF_RenderText_Solid(font, pk->toneName, textColor);
+	keyNameTexture = SDL_CreateTextureFromSurface(renderer, keyNameSurface);
+	toneNameTexture = SDL_CreateTextureFromSurface(renderer, toneNameSurface);
+
+	keyNameRect.x = pk->initX + width / 2 - keyNameSurface->w / 2;
+	keyNameRect.y = height - KEY_NAME_DISTANCE;
+	keyNameRect.w = keyNameSurface->w;
+	keyNameRect.h = keyNameSurface->h;
+
+	toneNameRect.x = pk->initX + width / 2 - toneNameSurface->w / 2;
+	toneNameRect.y = height - TONE_NAME_DISTANCE;
+	toneNameRect.w = toneNameSurface->w;
+	toneNameRect.h = toneNameSurface->h;
+
+	SDL_RenderCopy(renderer, keyNameTexture, NULL, &keyNameRect);
+	SDL_RenderCopy(renderer, toneNameTexture, NULL, &toneNameRect);
+
+	SDL_FreeSurface(keyNameSurface);
+	SDL_FreeSurface(toneNameSurface);
+	SDL_DestroyTexture(keyNameTexture);
+	SDL_DestroyTexture(toneNameTexture);
+}
+
+void render_key(PianoKey* pk){
+	SDL_Rect rect;
+	SDL_Color textColor;
+	
 	rect.x = pk->initX;
 	rect.y = 0;
-	int width, height;
-	int flag = 1;
 
 	if (pk->keyType == KT_BLACK){
 		rect.w = BLACK_KEY_WIDTH;
@@ -280,82 +306,24 @@ int render_key(PianoKey* pk){
 		}
 	}
 
+	/* filled rect. */
 	SDL_RenderFillRect(renderer, &rect);
 
 	/* outlined rect. */
 	SDL_SetRenderDrawColor(renderer, COLOR_BLACK.r, COLOR_BLACK.g, COLOR_BLACK.b, COLOR_BLACK.a);
 	SDL_RenderDrawRect(renderer, &rect);
 
-	if ((keyNameSurface = TTF_RenderText_Solid(font, pk->keyName, textColor)) == NULL) {
-		SDL_Log("Unable to create key name surface: %s, SDL_ttf Error: %s\n", pk->keyName, TTF_GetError());
-		flag = 0;
-		goto clean_surface_texture;
-	}
-
-	if ((toneNameSurface = TTF_RenderText_Solid(font, pk->toneName, textColor)) == NULL) {
-		SDL_Log("Unable to create tone name surface: %s, SDL_ttf Error: %s\n", pk->toneName, TTF_GetError());
-		flag = 0;
-		goto clean_surface_texture;
-	}
-
-	if ((keyNameTexture = SDL_CreateTextureFromSurface(renderer, keyNameSurface)) == NULL){
-		SDL_Log("Unable to create key name texture: %s, SDL_ttf Error: %s\n", pk->keyName, TTF_GetError());
-		flag = 0;
-		goto clean_surface_texture;
-	}
-
-	if ((toneNameTexture = SDL_CreateTextureFromSurface(renderer, toneNameSurface)) == NULL){
-		SDL_Log("Unable to create tone name texture: %s, SDL_ttf Error: %s\n", pk->toneName, TTF_GetError());
-		flag = 0;
-		goto clean_surface_texture;
-	}
-
-	SDL_Rect keyNameRect = { 
-		pk->initX + rect.w / 2 - keyNameSurface->w / 2, 
-		rect.h - KEY_NAME_DISTANCE, 
-		keyNameSurface->w, 
-		keyNameSurface->h 
-	};
-
-	SDL_Rect toneNameRect = { 
-		pk->initX + rect.w / 2 - toneNameSurface->w / 2, 
-		rect.h - TONE_NAME_DISTANCE, 
-		toneNameSurface->w, 
-		toneNameSurface->h 
-	};
-
-	SDL_RenderCopy(renderer, keyNameTexture, NULL, &keyNameRect);
-	SDL_RenderCopy(renderer, toneNameTexture, NULL, &toneNameRect);
-
-clean_surface_texture:
-	if (keyNameSurface != NULL){
-		SDL_FreeSurface(keyNameSurface);
-	}
-
-	if (toneNameSurface != NULL){
-		SDL_FreeSurface(toneNameSurface);
-	}
-
-	if (keyNameTexture != NULL){
-		SDL_DestroyTexture(keyNameTexture);
-	}
-
-	if (toneNameTexture != NULL){
-		SDL_DestroyTexture(toneNameTexture);
-	}
-	
-	return flag;
+	/* text. */
+	render_key_text(pk, textColor, rect.w, rect.h);
 }
 
-int render(void){
+void render(void){
 	SDL_RenderClear(renderer);
 
 	int i;
 	/* render white keys. */
 	for (i = 0; i < WHITE_KEY_NUM; ++i) {
-		if (!render_key(&(pianoKeys[i]))){
-			return 0;
-		}
+		render_key(&(pianoKeys[i]));
 	}
 
 	/* render lines. */
@@ -366,13 +334,10 @@ int render(void){
 
 	/* render black keys. */
 	for (i = WHITE_KEY_NUM; i < PIANO_KEY_NUM; ++i){
-		if (!render_key(&(pianoKeys[i]))){
-			return 0;
-		}
+		render_key(&(pianoKeys[i]));
 	}
 
 	SDL_RenderPresent(renderer);
-	return 1;
 }
 
 int load_sound(PianoKey* pk){
@@ -394,23 +359,23 @@ int load_sound(PianoKey* pk){
 }
 
 int main(){
+	PianoKey* pk;
+	Uint32 startTime, endTime, frameTime;
+	int running = 1;
+	SDL_Event event;
+
 	if (!init_resources()){
 		goto finally;
 	}
 
-	PianoKey* pk;
-	Uint32 startTime, endTime, frameTime;
-    	int running = 1;
-    	SDL_Event event;
-
-    	while (running) {
+	while (running) {
 		startTime = SDL_GetTicks();
 
-        	while (SDL_PollEvent(&event)) {
-            		if (event.type == SDL_QUIT) {
-                		running = 0;
+		while (SDL_PollEvent(&event)) {
+			if (event.type == SDL_QUIT) {
+				running = 0;
 			} else if (event.type == SDL_KEYDOWN) {
-                		pk = get_piano_key_mapping(event.key.keysym.sym);
+				pk = get_piano_key_mapping(event.key.keysym.sym);
 
 				if (pk != NULL){
 					pk->isPressed = 1;
@@ -423,26 +388,24 @@ int main(){
 
 					Mix_PlayChannel(event.key.keysym.sym % DEFAULT_CHANNEL_NUM, pk->chunk, 0);
 				}
-            		} else if (event.type == SDL_KEYUP) {
-                		pk = get_piano_key_mapping(event.key.keysym.sym);
+			} else if (event.type == SDL_KEYUP) {
+				pk = get_piano_key_mapping(event.key.keysym.sym);
 
 				if (pk != NULL){
 					pk->isPressed = 0;
 				}
-            		}
-        	}
-
-		if (!render()){
-			goto finally;
+			}
 		}
 
-		endTime = SDL_GetTicks();
-        	frameTime = endTime - startTime;
+		render();
 
-        	if (frameTime < FRAME_DELAY) {
-            		SDL_Delay(FRAME_DELAY - frameTime);
-        	}
-    	}
+		endTime = SDL_GetTicks();
+		frameTime = endTime - startTime;
+
+		if (frameTime < FRAME_DELAY) {
+			SDL_Delay(FRAME_DELAY - frameTime);
+		}
+    }
 
 finally:
 	clean_resources();
