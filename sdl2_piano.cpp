@@ -1,13 +1,16 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_ttf.h>
+#include <iostream>
 #include <algorithm>
-#include <random>
+#include <exception>
 #include <string>
 #include <memory>
 #include <array>
 
 #undef main
+
+using namespace std::string_literals;
 
 // frame rate.
 constexpr int FRAME_RATE = 60;
@@ -48,48 +51,48 @@ const SDL_Color COLOR_WHITE = { 255, 255, 255, 255 };
 const SDL_Color COLOR_BLACK = {   0,   0,   0, 255 };
 const SDL_Color COLOR_MIKU  = {  57, 197, 187, 255 };
 
-/**
- * SDL2 raii class, used to init the sdl, ttf, mixer.
-*/
-class SDLEnvWrapper {
-    bool all_right = true;
-public:
-    SDLEnvWrapper() {
-        if (SDL_Init(SDL_INIT_VIDEO) < 0){
-            SDL_Log("SDL_Init() failed: %s\n", SDL_GetError());
-            all_right = false;
-        }
-
-        if (TTF_Init() == -1){
-            SDL_Log("SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError());
-        	all_right = false;
-        }
-
-        if (Mix_OpenAudio(MIXER_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, MIXER_DEFAULT_CHANNEL_NUM, MIXER_DEFAULT_CHUNK_SIZE) < 0) {
-        	SDL_Log("SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError());
-        	all_right = false;
-    	}
-    }
-
-    ~SDLEnvWrapper() noexcept {
-        Mix_CloseAudio();
-        Mix_Quit();
-	    TTF_Quit();
-	    SDL_Quit();
-    }
-
-    bool valid() const noexcept {
-        return all_right;
-    }
-};
-
 enum class KeyType {
     Black, White
 };
 
-inline int setRenderDrawColor(SDL_Renderer* renderer, SDL_Color const& color) {
+inline int set_render_draw_color(SDL_Renderer* renderer, SDL_Color const& color) {
     return SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
 }
+
+class TextResource {
+    SDL_Surface* surface = nullptr;
+    SDL_Texture* texture = nullptr;
+public:
+    TextResource(){}
+
+    ~TextResource(){
+        if (surface != nullptr){
+            SDL_FreeSurface(surface);
+        }
+
+        if (texture != nullptr){
+            SDL_DestroyTexture(texture);
+        }
+    }
+
+    void create_text(SDL_Renderer* renderer, TTF_Font* font, std::string const& text, SDL_Color const& color) {
+        if ((surface = TTF_RenderText_Solid(font, text.c_str(), color)) == nullptr) {
+            throw std::runtime_error{ "Unable to create key name surface: "s + text + ", SDL_ttf Error: "s + TTF_GetError() };
+        }
+
+        if ((texture = SDL_CreateTextureFromSurface(renderer, surface)) == nullptr){
+            throw std::runtime_error { "Unable to create key name texture: "s + text + ", SDL_ttf Error: "s + TTF_GetError() };
+        }
+    }
+
+    SDL_Surface* get_surface() noexcept {
+        return surface;
+    }
+
+    SDL_Texture* get_texture() noexcept{
+        return texture;
+    } 
+};
 
 class Key {
     KeyType type;
@@ -99,55 +102,30 @@ class Key {
     bool pressed = false;
     int initX;
 
-    bool loadSound() noexcept {
+    void load_sound() {
         std::string soundPath = SOUND_FILE_PATH + toneName + SOUND_FILE_SUFFIX;
 
         SDL_RWops *rw = SDL_RWFromFile(soundPath.c_str(), "rb");
 	    if (rw == nullptr) {
-		    SDL_Log("SDL_RWFromFile() failed on: %s, error: %s\n", soundPath, SDL_GetError());
-		    return false;
+		    throw std::runtime_error { "SDL_RWFromFile() failed on: "s + soundPath + ", error: "s + SDL_GetError() };
 	    }
 
 	    // the 2nd parameter of the Mix_LoadWAV_RW() will free the rw automatically.
 	    if ((chunk = Mix_LoadWAV_RW(rw, 1)) == nullptr){
-		    SDL_Log("Can't load sound resource: %s, error: %s\n", soundPath, Mix_GetError());
-		    return false;
+		    throw std::runtime_error { "Can't load sound resource: "s + soundPath + ", error: "s + Mix_GetError() };
 	    }
-
-        return true;
     }
 
-    bool renderText(SDL_Renderer* renderer, TTF_Font* font, SDL_Color const& color, int width, int height) noexcept {
-        bool succeed = true;
-        SDL_Surface* keyNameSurface, *toneNameSurface;
-	    SDL_Texture* keyNameTexture, *toneNameTexture;
-        SDL_Rect keyNameRect;
-        SDL_Rect toneNameRect;
+    void render_text(SDL_Renderer* renderer, TTF_Font* font, SDL_Color const& color, int width, int height) noexcept {
+        SDL_Rect keyNameRect, toneNameRect;
+        TextResource keyNameText, toneNameText;
 
-        if ((keyNameSurface = TTF_RenderText_Solid(font, keyName.c_str(), color)) == nullptr) {
-            SDL_Log("Unable to create key name surface: %s, SDL_ttf Error: %s\n", keyName.c_str(), TTF_GetError());
-            succeed = false;
-            goto clean_surface_texture;
-        }
-
-        if ((toneNameSurface = TTF_RenderText_Solid(font, toneName.c_str(), color)) == nullptr) {
-            SDL_Log("Unable to create tone name surface: %s, SDL_ttf Error: %s\n", toneName.c_str(), TTF_GetError());
-            succeed = false;
-            goto clean_surface_texture;
-        }
-
-        if ((keyNameTexture = SDL_CreateTextureFromSurface(renderer, keyNameSurface)) == nullptr){
-            SDL_Log("Unable to create key name texture: %s, SDL_ttf Error: %s\n", keyName.c_str(), TTF_GetError());
-            succeed = false;
-            goto clean_surface_texture;
-        }
-
-        if ((toneNameTexture = SDL_CreateTextureFromSurface(renderer, toneNameSurface)) == nullptr){
-            SDL_Log("Unable to create tone name texture: %s, SDL_ttf Error: %s\n", toneName.c_str(), TTF_GetError());
-            succeed = false;
-            goto clean_surface_texture;
-        }
+        keyNameText.create_text(renderer, font, keyName, color);
+        toneNameText.create_text(renderer, font, toneName, color);
         
+        SDL_Surface* keyNameSurface = keyNameText.get_surface();
+        SDL_Surface* toneNameSurface = toneNameText.get_surface();
+
         keyNameRect.x = initX + width / 2 - keyNameSurface->w / 2;
         keyNameRect.y = height - KEY_NAME_DISTANCE;
         keyNameRect.w = keyNameSurface->w;
@@ -158,27 +136,8 @@ class Key {
         toneNameRect.w = toneNameSurface->w;
         toneNameRect.h = toneNameSurface->h;
 
-        SDL_RenderCopy(renderer, keyNameTexture, nullptr, &keyNameRect);
-        SDL_RenderCopy(renderer, toneNameTexture, nullptr, &toneNameRect);
-
-    clean_surface_texture:
-        if (keyNameSurface != nullptr){
-            SDL_FreeSurface(keyNameSurface);
-        }
-
-        if (toneNameSurface != nullptr){
-            SDL_FreeSurface(toneNameSurface);
-        }
-
-        if (keyNameTexture != nullptr){
-            SDL_DestroyTexture(keyNameTexture);
-        }
-
-        if (toneNameTexture != nullptr){
-            SDL_DestroyTexture(toneNameTexture);
-        }
-        
-        return succeed;
+        SDL_RenderCopy(renderer, keyNameText.get_texture(), nullptr, &keyNameRect);
+        SDL_RenderCopy(renderer, toneNameText.get_texture(), nullptr, &toneNameRect);
     }
 public:
     Key(){}
@@ -193,22 +152,19 @@ public:
         }
     }
 
-    void setPressed(bool isPressed) noexcept {
+    void set_pressed(bool isPressed) noexcept {
         pressed = isPressed;
     }
 
-    bool playSound(int channel) noexcept {
+    void play_sound(int channel) {
         if (chunk == nullptr) {
-            if (!loadSound()){
-                return false;
-            }
+            load_sound();
         }
 
         Mix_PlayChannel(channel, chunk, 0);
-        return true;
     }
 
-    bool render(SDL_Renderer* renderer, TTF_Font* font) noexcept {
+    void render(SDL_Renderer* renderer, TTF_Font* font) {
         SDL_Rect rect;
         SDL_Color textColor;
 
@@ -221,10 +177,10 @@ public:
             textColor = COLOR_WHITE;
 
             if (pressed){
-                setRenderDrawColor(renderer, COLOR_MIKU);
+                set_render_draw_color(renderer, COLOR_MIKU);
             }
             else {
-                setRenderDrawColor(renderer, COLOR_BLACK);
+                set_render_draw_color(renderer, COLOR_BLACK);
             }
         }
         else {
@@ -233,10 +189,10 @@ public:
             textColor = COLOR_BLACK;
             
             if (pressed){
-                setRenderDrawColor(renderer, COLOR_MIKU);
+                set_render_draw_color(renderer, COLOR_MIKU);
             }
             else {
-                setRenderDrawColor(renderer, COLOR_WHITE);
+                set_render_draw_color(renderer, COLOR_WHITE);
             }
         }
 
@@ -244,21 +200,34 @@ public:
         SDL_RenderFillRect(renderer, &rect);
 
         // outlined rect.
-        setRenderDrawColor(renderer, COLOR_BLACK);
+        set_render_draw_color(renderer, COLOR_BLACK);
         SDL_RenderDrawRect(renderer, &rect);
 
-        return renderText(renderer, font, textColor, rect.w, rect.h);
+        render_text(renderer, font, textColor, rect.w, rect.h);
     }
 };
 
 class Piano {
-    bool all_right = true;
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     TTF_Font* font = nullptr;
     std::array<Key, PIANO_KEY_NUM> keys;
 
-    void initResource() noexcept {
+    void init_graphics_ttf_mixer(){
+        if (SDL_Init(SDL_INIT_VIDEO) < 0){
+            throw std::runtime_error { "SDL_Init() failed: "s + SDL_GetError() };
+        }
+
+        if (TTF_Init() == -1){
+            throw std::runtime_error { "SDL_ttf could not initialize! SDL_ttf Error: "s + TTF_GetError() };
+        }
+
+        if (Mix_OpenAudio(MIXER_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, MIXER_DEFAULT_CHANNEL_NUM, MIXER_DEFAULT_CHUNK_SIZE) < 0) {
+        	throw std::runtime_error { "SDL_mixer could not initialize! SDL_mixer Error: "s + Mix_GetError() };
+    	}
+    }
+
+    void init_resources() {
         window = SDL_CreateWindow(WINDOW_TITLE.c_str(), 
 								SDL_WINDOWPOS_CENTERED, 
 								SDL_WINDOWPOS_CENTERED, 
@@ -267,24 +236,21 @@ class Piano {
 								0);
 							
 	    if (window == nullptr){
-		    SDL_Log("create window failed: %s\n", SDL_GetError());
-		    all_right = false;
+		    throw std::runtime_error { "create window failed: "s + SDL_GetError() };
 	    }
 
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
         if (renderer == nullptr){
-            SDL_Log("create renderer failed: %s\n", SDL_GetError());
-            all_right = false;
+            throw std::runtime_error{ "create renderer failed: "s + SDL_GetError() };
         }
 
         font = TTF_OpenFont(FONT_PATH.c_str(), DEFAULT_FONT_SIZE);
     	if (font == nullptr) {
-        	SDL_Log("Failed to load font! SDL_ttf Error: %s\n", TTF_GetError());
-            all_right = false;
+        	throw std::runtime_error{ "Failed to load font! SDL_ttf Error: "s + TTF_GetError() };
     	}
     }
 
-    void initKeys() noexcept {
+    void init_keys() noexcept {
         keys[0]  = Key{ KeyType::White, "1", "C3",  WHITE_KEY_WIDTH * 0 };
         keys[1]  = Key{ KeyType::White, "3", "D3",  WHITE_KEY_WIDTH * 1 };
         keys[2]  = Key{ KeyType::White, "5", "E3",  WHITE_KEY_WIDTH * 2 };
@@ -323,7 +289,7 @@ class Piano {
         keys[35] = Key{ KeyType::Black, "N", "Bb5", WHITE_KEY_WIDTH * 20 - BLACK_KEY_WIDTH / 2 };
     }
 
-    Key* getKeyMapping(SDL_Keycode key){
+    Key* get_key_mapping(SDL_Keycode key) {
         switch (key) {
             case SDLK_1: return &(keys[0]);
             case SDLK_3: return &(keys[1]);
@@ -365,38 +331,30 @@ class Piano {
         }
     }
 
-    bool render() noexcept {
-        setRenderDrawColor(renderer, COLOR_BLACK);
+    void render() {
+        set_render_draw_color(renderer, COLOR_BLACK);
         SDL_RenderClear(renderer);
 
-        /* render white keys. */
+        // render white keys.
         for (int i = 0; i < WHITE_KEY_NUM; ++i) {
-            if (!keys[i].render(renderer, font)){
-                return false;
-            }
+            keys[i].render(renderer, font);
         }
 
-        /* render lines. */
-        setRenderDrawColor(renderer, COLOR_BLACK);
+        // render lines.
+        set_render_draw_color(renderer, COLOR_BLACK);
         for (int i = 0; i < WHITE_KEY_NUM; ++i){
             SDL_RenderDrawLine(renderer, i * WHITE_KEY_WIDTH, 0, i * WHITE_KEY_WIDTH, WHITE_KEY_HEIGHT);
         }
 
-        /* render black keys. */
+        // render black keys.
         for (int i = WHITE_KEY_NUM; i < PIANO_KEY_NUM; ++i){
-            if (!keys[i].render(renderer, font)){
-                return false;
-            }
+            keys[i].render(renderer, font);
         }
 
         SDL_RenderPresent(renderer);
-        return true;
     }
 public:
-    Piano() {
-        initResource();
-        initKeys();
-    }
+    Piano() {}
 
     ~Piano() noexcept {
         if (font != nullptr) {
@@ -410,64 +368,64 @@ public:
 	    if (window != nullptr) {
 		    SDL_DestroyWindow(window);
 	    }
+
+        Mix_CloseAudio();
+        Mix_Quit();
+        TTF_Quit();
+        SDL_Quit();        
     }
 
-    bool valid() const noexcept {
-        return all_right;
-    }
+    void start() {
+        init_graphics_ttf_mixer();
+        init_resources();
+        init_keys();
 
-    void start() noexcept {
         Uint32 startTime, endTime, frameTime;
         bool running = true;
         SDL_Event event;
 
         while (running) {
-		    startTime = SDL_GetTicks();
+		startTime = SDL_GetTicks();
 
-		    while (SDL_PollEvent(&event)) {
-			    if (event.type == SDL_QUIT) {
-				    running = false;
-			    } else if (event.type == SDL_KEYDOWN) {
-                    Key* key = getKeyMapping(event.key.keysym.sym);
+		while (SDL_PollEvent(&event)) {
+			if (event.type == SDL_QUIT) {
+				running = false;
+			} else if (event.type == SDL_KEYDOWN) {
+                    		Key* key = get_key_mapping(event.key.keysym.sym);
 
-                    if (key != nullptr) {
-                        key->setPressed(true);
-                        key->playSound(event.key.keysym.sym % MIXER_DEFAULT_CHANNEL_NUM);
-                    }
-			    } else if (event.type == SDL_KEYUP) {
-				    Key* key = getKeyMapping(event.key.keysym.sym);
+                    		if (key != nullptr) {
+                        		key->set_pressed(true);
+                        		key->play_sound(event.key.keysym.sym % MIXER_DEFAULT_CHANNEL_NUM);
+                    		}
+			} else if (event.type == SDL_KEYUP) {
+				Key* key = get_key_mapping(event.key.keysym.sym);
 
-                    if (key != nullptr) {
-                        key->setPressed(false);
-                    }
-			    }
-		    }
+                    		if (key != nullptr) {
+                        		key->set_pressed(false);
+                    		}
+			}
+		}
 
-            if (!render()){
-                return;
-            }
+		render();
 
-            endTime = SDL_GetTicks();
-            frameTime = endTime - startTime;
+            	endTime = SDL_GetTicks();
+            	frameTime = endTime - startTime;
 
-            if (frameTime < FRAME_DELAY_MILLISEC) {
-                SDL_Delay(FRAME_DELAY_MILLISEC - frameTime);
-            }
-        }
+            	if (frameTime < FRAME_DELAY_MILLISEC) {
+                	SDL_Delay(FRAME_DELAY_MILLISEC - frameTime);
+            	}
+	}
     }
 };
 
 int main(){
-    SDLEnvWrapper env;
-    if (!env.valid()){
-        return 1;
+    try {
+        auto piano = std::make_unique<Piano>();
+        piano->start();
     }
-
-    auto piano = std::make_unique<Piano>();
-    if (!piano->valid()){
-        return 1;
+    catch(std::exception const& e){
+        std::cerr << e.what() << "\n";
     }
-
-    piano->start();
+    
     return 0;
 }
